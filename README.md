@@ -116,14 +116,14 @@ You can do this over as many days as you need. Just make sure your backup storag
 
 ## vzdump call chain
 
-List of the calls made to vzdump during backup, in chronological order :
+List of the calls made to vzdump during backup, in chronological order, and what vzdump and we are doing during each step
 
-job-init: initialization of the backup
-job-start: step where the process removes old backups
-backup-start: this is when the backup really starts. A tmp file is created, the guest is suspended to dump it.
-pre-stop: another dump is made to be sure it all worked. The host is restarted.
-pre-restart: 
-post-restart: the dump is archived to the backup folder.
-backup-end: the dump has been created, that's when we upload it via rclone.
-log-end: 
-job-end: everything is finished
+- job-init: initialization of the backup. We'll send a /start signal to healthcheck.
+- job-start: step where the process removes old backups
+- backup-start: this is when the backup really starts. A tmp file is created, the guest is suspended to dump it.
+- pre-stop: another dump is made to be sure it all worked. The host is restarted.
+- pre-restart: 
+- post-restart: the dump is archived to the backup folder.
+- backup-end: the dump has been created, that's when we upload it via rclone.
+- log-end: 
+- job-end: everything is finished
