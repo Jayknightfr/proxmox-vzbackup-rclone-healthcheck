@@ -4,6 +4,8 @@
 ############ /START CONFIG
 dumpdir="/backup/dump" # Set this to where your vzdump files are stored
 MAX_AGE=6 # This is the age in days to keep local backup copies. Local backups older than this are deleted.
+# Healthchecks url
+url="https://hc-ping.com/p2bZY9PQh2clMe69UpcSSQ/proxmox_"
 ############ /END CONFIG
 
 echo "*                       *"
@@ -35,6 +37,16 @@ if [[ ${COMMAND} == 'rehydrate' ]]; then
     -v --stats=60s --transfers=16 --checkers=16
 fi
 
+if [[ ${COMMAND} == 'job-init' ]]; then
+    id=$3
+    echo "==============STARTING BACKUP======================"
+    echo "Backing up dumps of id [$id] to remote storage"
+
+    echo "curling $url$id/start"
+    curl --retry 3 "$url$id/start"
+
+fi
+
 if [[ ${COMMAND} == 'job-start' ]]; then
     echo "Deleting backups older than $MAX_AGE days."
     find $dumpdir -type f -mtime +$MAX_AGE -exec /bin/rm -f {} \;
@@ -43,13 +55,6 @@ fi
 if [[ ${COMMAND} == 'backup-end' ]]; then
 #    tarfile=$(ls -1t "$dumpdir" | head -n 1)
     id=$3
-    echo "==============STARTING BACKUP======================"
-    echo "Backing up dumps of id [$id] to remote storage"
-
-    # Healthchecks url
-    url="https://hc-ping.com/p2bZY9PQh2clMe69UpcSSQ/proxmox_"
-    echo "curling $url$id/start"
-    curl --retry 3 "$url$id/start"
 
 #    echo "rclone --config /root/.config/rclone/rclone.conf --drive-chunk-size=32M copy $tarfile kdrivecrypt:/$timepath -v --stats=60s --transfers=16 --checkers=16"
 
@@ -60,17 +65,13 @@ if [[ ${COMMAND} == 'backup-end' ]]; then
     --no-traverse --include "*$id*" --max-depth 1 #--max-age 1h
 
     result=$?;
-    if [[$result == 0 ]]; then
-       curl --retry 3 $url;
-    else
-       # Envoi de l'info de fin de backup avec le code retour de la commande rclone
-       curl --retry 3 "$url$id/$?"
-    fi
-    echo "=============BACKUP FINISHED======================"
+    url=$url$id$([[ $result -eq 0 ]] && echo "" || echo "/$result")"
+    echo "sending Healthchecks ping on $url"
+    curl --retry 3 $url
 fi
 
 if [[ ${COMMAND} == 'job-end' ||  ${COMMAND} == 'job-abort' ]]; then
-    echo "Backing up main PVE configs"
+    echo "Job has ended or was aborted. Backing up main PVE configs"
     _tdir=${TMP_DIR:-/var/tmp}
     _tdir=$(mktemp -d $_tdir/proxmox-XXXXXXXX)
     function clean_up {
@@ -106,4 +107,5 @@ if [[ ${COMMAND} == 'job-end' ||  ${COMMAND} == 'job-abort' ]]; then
     -v --stats=60s --transfers=16 --checkers=16
 
     #rm -rfv $rcloneroot
+    echo "=============BACKUP FINISHED======================"
 fi
