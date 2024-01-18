@@ -59,8 +59,13 @@ if [[ ${COMMAND} == 'backup-end' ]]; then
     -v --stats=60s --transfers=16 --checkers=16 \
     --no-traverse --include "*$id*" --max-depth 1 #--max-age 1h
 
-    # Envoi de l'info de fin de backup avec le code retour de la commande rclone
-    curl --retry 3 "$url$id/$?"
+    result=$?;
+    if [[$result == 0 ]]; then
+       curl --retry 3 $url;
+    else
+       # Envoi de l'info de fin de backup avec le code retour de la commande rclone
+       curl --retry 3 "$url$id/$?"
+    fi
     echo "=============BACKUP FINISHED======================"
 fi
 
