@@ -21,10 +21,11 @@ echo "*                       *"
 _bdir="$dumpdir"
 rcloneroot="$dumpdir/rclone"
 timepath="$(date +%Y)-$(date +%m)-$(date +%d)"
+# shellcheck disable=SC2034
 rclonedir="$rcloneroot/$timepath"
 COMMAND=${1}
 rehydrate=${2} #enter the date you want to rehydrate in the following format: YYYY/MM/DD
-if [ ! -z "${3}" ];then
+if [ -n "${3}" ];then
         CMDARCHIVE=$(echo "/${3}" | sed -e 's/\(.bin\)*$//g')
 fi
 
@@ -33,14 +34,17 @@ if [[ ${COMMAND} == 'rehydrate' ]]; then
     #echo "For example, today would be: $timepath"
     #read -p 'Rehydrate Date => ' rehydrate
     rclone --config /root/.config/rclone/rclone.conf \
-    --drive-chunk-size=32M copy kdrivecrypt:/$rehydrate$CMDARCHIVE $dumpdir \
+    --drive-chunk-size=32M copy "kdrivecrypt:/$rehydrate$CMDARCHIVE" "$dumpdir" \
     -v --stats=60s --transfers=16 --checkers=16
 fi
 
-if [[ ${COMMAND} == 'job-init' ]]; then
-    id=$3
+if [[ ${COMMAND} == 'backup-start' ]]; then
     echo "==============STARTING BACKUP======================"
-    echo "Backing up dumps of id [$id] to remote storage"
+fi
+
+if [[ ${COMMAND} == 'backup-start' ]]; then
+    id=$3
+    echo "Backing up dumps of id [$id]"
 
     echo "curling $url$id/start"
     curl --retry 3 "$url$id/start"
@@ -60,23 +64,26 @@ if [[ ${COMMAND} == 'backup-end' ]]; then
 
     #ls $rclonedir
     rclone --config /root/.config/rclone/rclone.conf \
-    --drive-chunk-size=32M copy $dumpdir kdrivecrypt:/$id \
+    --drive-chunk-size=32M copy "$dumpdir" "kdrivecrypt:/$id" \
     -v --stats=60s --transfers=16 --checkers=16 \
     --no-traverse --include "*$id*" --max-depth 1 #--max-age 1h
 
-    result=$?;
-    url=$url$id$([[ $result -eq 0 ]] && echo "" || echo "/$result")"
-    echo "sending Healthchecks ping on $url"
-    curl --retry 3 $url
+    result=$?
+    urlToPing="$url$id"
+    if [ "$result" -ne 0 ]; then
+       urlToPing="${urlToPing}/$result"
+    fi
+    echo "sending Healthchecks ping on $urlToPing"
+    curl --retry 3 "$urlToPing"
 fi
 
 if [[ ${COMMAND} == 'job-end' ||  ${COMMAND} == 'job-abort' ]]; then
     echo "Job has ended or was aborted. Backing up main PVE configs"
     _tdir=${TMP_DIR:-/var/tmp}
-    _tdir=$(mktemp -d $_tdir/proxmox-XXXXXXXX)
+    _tdir=$(mktemp -d "$_tdir/proxmox-XXXXXXXX")
     function clean_up {
         echo "Cleaning up"
-        rm -rf $_tdir
+        rm -rf "$_tdir"
     }
     trap clean_up EXIT
     _now=$(date +%Y-%m-%d.%H.%M.%S)
@@ -84,7 +91,7 @@ if [[ ${COMMAND} == 'job-end' ||  ${COMMAND} == 'job-abort' ]]; then
     _filename1="$_tdir/proxmoxetc.$_now.tar"
     _filename2="$_tdir/proxmoxpve.$_now.tar"
     _filename3="$_tdir/proxmoxroot.$_now.tar"
-    _filename4="$_tdir/proxmox_backup_"$_HOSTNAME"_"$_now".tar.gz"
+    _filename4="$_tdir/proxmox_backup_$_HOSTNAME-$_now.tar.gz"
 
     echo "Tar files"
     # copy key system files
@@ -94,18 +101,18 @@ if [[ ${COMMAND} == 'job-end' ||  ${COMMAND} == 'job-abort' ]]; then
 
     echo "Compressing files"
     # archive the copied system files
-    tar -cvzPf "$_filename4" $_tdir/*.tar
+    tar -cvzPf "$_filename4" "$_tdir"/*.tar
 
     # copy config archive to backup folder
     #mkdir -p $rclonedir
-    cp -v $_filename4 $_bdir/
+    cp -v "$_filename4" "$_bdir"/
     #cp -v $_filename4 $rclonedir/
     echo "rcloning $_filename4"
     #ls $rclonedir
     rclone --config /root/.config/rclone/rclone.conf \
-    --drive-chunk-size=32M move $_filename4 kdrivecrypt:/pve/$timepath \
+    --drive-chunk-size=32M move "$_filename4" kdrivecrypt:/pve/"$timepath" \
     -v --stats=60s --transfers=16 --checkers=16
 
     #rm -rfv $rcloneroot
-    echo "=============BACKUP FINISHED======================"
+    echo "=============BACKUP FINISHED==============="
 fi
