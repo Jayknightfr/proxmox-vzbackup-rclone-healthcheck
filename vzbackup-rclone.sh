@@ -52,29 +52,31 @@ if [[ ${COMMAND} == 'backup-start' ]]; then
 fi
 
 if [[ ${COMMAND} == 'job-start' ]]; then
-    echo "Deleting backups older than $MAX_AGE days."
-    find $dumpdir -type f -mtime +$MAX_AGE -exec /bin/rm -f {} \;
+#    echo "Deleting backups older than $MAX_AGE days."
+#    find $dumpdir -type f -mtime +$MAX_AGE -exec /bin/rm -f {} \;
 fi
 
 if [[ ${COMMAND} == 'backup-end' ]]; then
 #    tarfile=$(ls -1t "$dumpdir" | head -n 1)
     id=$3
 
-#    echo "rclone --config /root/.config/rclone/rclone.conf --drive-chunk-size=32M copy $tarfile kdrivecrypt:/$timepath -v --stats=60s --transfers=16 --checkers=16"
-
-    #ls $rclonedir
     rclone --config /root/.config/rclone/rclone.conf \
-    --drive-chunk-size=32M copy "$dumpdir" "kdrivecrypt:/$id" \
-    -v --stats=60s --transfers=16 --checkers=16 \
-    --no-traverse --include "*$id*" --max-depth 1 #--max-age 1h
+	sync "$dumpdir" "kchunk:$id" \
+    	-v --stats=60s --transfers=16 --checkers=16 \
+	--no-traverse --include "*$id*" --max-depth 1 \
+	#--max-age 48h \
+	 --progress
 
     result=$?
     urlToPing="$url$id"
+    # Si le backup a échoué, on envoie le message d'erreur
     if [ "$result" -ne 0 ]; then
        urlToPing="${urlToPing}/$result"
-    fi
-    echo "sending Healthchecks ping on $urlToPing"
-    curl --retry 3 "$urlToPing"
+    else
+       # si le backup a fonctionné, on envoie le résultat OK
+       echo "sending Healthchecks ping on $urlToPing"
+       curl --retry 3 "$urlToPing"
+   fi
 fi
 
 if [[ ${COMMAND} == 'job-end' ||  ${COMMAND} == 'job-abort' ]]; then
